@@ -38,7 +38,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useRef} = React;
+const {useState,useRef,useCallback} = React;
 const API="https://api.anthropic.com/v1/messages";
 const MODEL="claude-sonnet-4-6";
 const GMAIL={type:"url",url:"https://gmail.mcp.claude.com/mcp",name:"gmail-mcp"};
@@ -60,6 +60,7 @@ const XI   =()=><svg width="13" height="13" viewBox="0 0 24 24" fill="currentCol
 function App() {
   const [step, setStep]   = useState(0);
   const [apiKey,setApiKey]= useState(()=>localStorage.getItem("anthro_key")||"");
+  const [showKey,setShowKey]=useState(false);
   const [title,setTitle]  = useState("");
   const [photo,setPhoto]  = useState(null);
   const [files,setFiles]  = useState([]);
@@ -69,7 +70,7 @@ function App() {
   const [rec,  setRec]    = useState(false);
   const [summ, setSumm]   = useState(null);
   const [busy, setBusy]   = useState("");
-  const [mails,setMails]  = useState(["",""]);
+  const [mails,setMails]  = useState(["deepa@sparc-ai.org","kostas@sparc-ai.org"]);
   const [sent, setSent]   = useState(false);
   const [err,  setErr]    = useState("");
   const photoRef=useRef(); const fileRef=useRef();
@@ -219,8 +220,18 @@ Shape: {"summary":"2-3 sentences","whiteboardNotes":"key items or null","keyDeci
           <div className="slide-up" style={{display:"flex",flexDirection:"column",gap:20}}>
 
             <FLD label="Anthropic API key">
-              <input value={apiKey} onChange={e=>saveKey(e.target.value)} placeholder="sk-ant-…" type="password"
-                style={{width:"100%",marginTop:7,background:"var(--surface)",border:`0.5px solid ${apiKey?"var(--green-border)":"var(--border-strong)"}`,borderRadius:10,padding:"11px 14px",fontSize:15,color:"var(--text)",outline:"none"}}/>
+              <div style={{display:"flex",gap:6,marginTop:7}}>
+                <input value={apiKey} onChange={e=>saveKey(e.target.value)} placeholder="sk-ant-…" type={showKey?"text":"password"}
+                  style={{flex:1,background:"var(--surface)",border:`0.5px solid ${apiKey?"var(--green-border)":"var(--border-strong)"}`,borderRadius:10,padding:"11px 14px",fontSize:15,color:"var(--text)",outline:"none"}}/>
+                <button onClick={()=>setShowKey(s=>!s)}
+                  style={{padding:"0 12px",borderRadius:10,border:"0.5px solid var(--border-strong)",background:"var(--surface)",color:"var(--text-2)",cursor:"pointer",fontSize:12,flexShrink:0}}>
+                  {showKey?"Hide":"Show"}
+                </button>
+                {apiKey&&<button onClick={()=>saveKey("")}
+                  style={{padding:"0 12px",borderRadius:10,border:"0.5px solid #fca5a5",background:"var(--red-bg)",color:"var(--red)",cursor:"pointer",fontSize:12,flexShrink:0}}>
+                  Clear
+                </button>}
+              </div>
               <p style={{fontSize:11,color:"var(--text-3)",marginTop:4}}>Saved locally in your browser. Never sent anywhere else.</p>
             </FLD>
 
