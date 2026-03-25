@@ -160,26 +160,19 @@ Shape: {"summary":"2-3 sentences","whiteboardNotes":"key items or null","keyDeci
     finally{setBusy("");}
   };
 
-  const sendEmails = async () => {
+  const sendEmails = () => {
     const valid=mails.filter(e=>e.trim().includes("@"));
     if(!valid.length){alert("Add at least one email.");return;}
-    setBusy("Sending…"); setErr("");
-    try {
-      const d=new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
-      const t=title||"Team Meeting";
-      const body=`Hi team,\n\nHere are the notes from ${t} on ${d}.\n\nSUMMARY\n${summ.summary}${summ.whiteboardNotes?`\n\nNOTES\n${summ.whiteboardNotes}`:""}\n\nKEY DECISIONS\n${summ.keyDecisions?.map(x=>`• ${x}`).join("\n")||"• None"}\n\nACTION ITEMS\n${summ.actionItems?.map(a=>`• ${a.task}${a.owner&&a.owner!=="null"?` → ${a.owner}`:""}`).join("\n")||"• None"}\n\nNEXT STEPS\n${summ.nextSteps?.map(x=>`• ${x}`).join("\n")||"• None"}\n\n—\nSent via Meeting Notes`;
-      const res=await fetch(API,{method:"POST",headers:authHeaders(),
-        body:JSON.stringify({model:MODEL,max_tokens:1000,
-          messages:[{role:"user",content:`Send email via Gmail:\nTo: ${valid.join(", ")}\nSubject: Meeting Notes: ${t} — ${new Date().toLocaleDateString()}\nBody:\n${body}`}],
-          mcp_servers:[GMAIL]})});
-      const data=await res.json();
-      if(data.error) throw new Error(data.error.message);
-      setSent(true); setStep(2);
-    } catch(e){setErr("Send failed: "+e.message);}
-    finally{setBusy("");}
+    const d=new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+    const t=title||"Team Meeting";
+    const body=`Hi team,\n\nHere are the notes from ${t} on ${d}.\n\nSUMMARY\n${summ.summary}${summ.whiteboardNotes?`\n\nNOTES\n${summ.whiteboardNotes}`:""}\n\nKEY DECISIONS\n${summ.keyDecisions?.map(x=>`• ${x}`).join("\n")||"• None"}\n\nACTION ITEMS\n${summ.actionItems?.map(a=>`• ${a.task}${a.owner&&a.owner!=="null"?` → ${a.owner}`:""}`).join("\n")||"• None"}\n\nNEXT STEPS\n${summ.nextSteps?.map(x=>`• ${x}`).join("\n")||"• None"}\n\n—\nSent via Meeting Notes`;
+    const subject=`Meeting Notes: ${t} — ${new Date().toLocaleDateString()}`;
+    const mailto=`mailto:${valid.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href=mailto;
+    setSent(true); setStep(2);
   };
 
-  const reset=()=>{setStep(0);setTitle("");setPhoto(null);setFiles([]);setTx("");setIntr("");setRec(false);setSumm(null);setMails(["",""]);setSent(false);setErr("");setBusy("");txBuf.current="";liveRef.current=false;/* apiKey kept */};
+  const reset=()=>{setStep(0);setTitle("");setPhoto(null);setFiles([]);setTx("");setIntr("");setRec(false);setSumm(null);setMails(["deepa@sparc-ai.org","kostas@sparc-ai.org"]);setSent(false);setErr("");setBusy("");txBuf.current="";liveRef.current=false;/* apiKey kept */};
   const fmtSize=b=>b<1024?b+"B":b<1048576?(b/1024).toFixed(1)+"KB":(b/1048576).toFixed(1)+"MB";
   const hasArtifacts=photo||tx.trim()||files.length>0;
 
