@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Meeting Notes">
+<title>Meeting Notes</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f9f9f8; --surface: #ffffff; --surface2: #f4f4f2;
+    --border: rgba(0,0,0,0.1); --border-strong: rgba(0,0,0,0.18);
+    --text: #1a1a18; --text-2: #6b6b68; --text-3: #9a9a96;
+    --green: #059669; --green-bg: #ecfdf5; --green-border: #a7f3d0;
+    --red: #dc2626; --red-bg: #fef2f2;
+    --purple: #7c3aed; --purple-bg: #f5f3ff; --purple-border: #ddd6fe;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-border: #bfdbfe;
+  }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; -webkit-font-smoothing:antialiased; }
+  #root { height:100%; }
+  input,textarea,button { font-family:inherit; }
+  ::-webkit-scrollbar { display:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  @keyframes slideUp { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+  @keyframes pop { 0%{transform:scale(.88);opacity:0}60%{transform:scale(1.03)}100%{transform:scale(1);opacity:1} }
+  .spin { animation:spin .8s linear infinite; }
+  .pulse { animation:pulse 1.4s ease-in-out infinite; }
+  .slide-up { animation:slideUp .2s ease-out both; }
+  .pop { animation:pop .35s ease-out both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef} = React;
+const API="https://api.anthropic.com/v1/messages";
+const MODEL="claude-sonnet-4-6";
+const GMAIL={type:"url",url:"https://gmail.mcp.claude.com/mcp",name:"gmail-mcp"};
+const STEPS=["Capture","Summary","Send"];
+
+const Mic  =()=><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zm0 2a1 1 0 0 0-1 1v6a1 1 0 0 0 2 0V5a1 1 0 0 0-1-1zm5.66 7.11A6 6 0 0 1 6.34 11.1l-1.41 1.41A8 8 0 0 0 11 18.94V21H9v2h6v-2h-2v-2.06a8 8 0 0 0 6.07-6.42l-1.41-1.41z"/></svg>;
+const Stop =()=><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
+const CamI =()=><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 2 7.17 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3.17L15 2H9zm3 15a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>;
+const UpI  =()=><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>;
+const FileI=()=><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>;
+const SendI=()=><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>;
+const BackI=()=><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg>;
+const ChkI =()=><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>;
+const PlusI=()=><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>;
+const SprkI=()=><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L9.19 8.62 2 9.27l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.64-7 5.46-4.73-7.19-.65z"/></svg>;
+const TrshI=()=><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>;
+const XI   =()=><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>;
+
+function App() {
+  const [step, setStep]   = useState(0);
+  const [apiKey,setApiKey]= useState(()=>localStorage.getItem("anthro_key")||"");
+  const [title,setTitle]  = useState("");
+  const [photo,setPhoto]  = useState(null);
+  const [files,setFiles]  = useState([]);
+  const [drag, setDrag]   = useState(false);
+  const [tx,   setTx]     = useState("");
+  const [intr, setIntr]   = useState("");
+  const [rec,  setRec]    = useState(false);
+  const [summ, setSumm]   = useState(null);
+  const [busy, setBusy]   = useState("");
+  const [mails,setMails]  = useState(["",""]);
+  const [sent, setSent]   = useState(false);
+  const [err,  setErr]    = useState("");
+  const photoRef=useRef(); const fileRef=useRef();
+  const recRef=useRef(); const liveRef=useRef(false); const txBuf=useRef("");
+
+  const saveKey = k => { setApiKey(k); localStorage.setItem("anthro_key", k); };
+  const authHeaders = () => ({
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+    "anthropic-beta": "mcp-client-2025-04-04"
+  });
+
+  const onPhoto = e => {
+    const f=e.target.files?.[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=ev=>setPhoto({preview:ev.target.result,base64:ev.target.result.split(",")[1],mime:f.type||"image/jpeg",name:f.name});
+    r.readAsDataURL(f);
+  };
+
+  const readFile = f => new Promise(res=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      const b64=ev.target.result.split(",")[1];
+      res({name:f.name,base64:b64,mime:f.type||"application/octet-stream",size:f.size,
+           preview:f.type.startsWith("image/")?ev.target.result:null});
+    };
+    r.readAsDataURL(f);
+  });
+
+  const addFiles = async arr => {
+    const read=await Promise.all(Array.from(arr).map(readFile));
+    setFiles(p=>[...p,...read]);
+  };
+
+  const onDrop = async e => {
+    e.preventDefault(); setDrag(false);
+    if(e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  };
+
+  const toggleRec = () => {
+    if(liveRef.current){
+      liveRef.current=false; setRec(false); setIntr("");
+      recRef.current?.stop(); recRef.current=null;
+    } else {
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      if(!SR){alert("Use Safari on iPhone for transcription.");return;}
+      txBuf.current=tx;
+      const r=new SR(); r.continuous=true; r.interimResults=true; r.lang="en-US";
+      r.onresult=e=>{
+        let it="";
+        for(let i=e.resultIndex;i<e.results.length;i++){
+          if(e.results[i].isFinal){txBuf.current+=e.results[i][0].transcript+" ";setTx(txBuf.current);}
+          else it+=e.results[i][0].transcript;
+        }
+        setIntr(it);
+      };
+      r.onend=()=>{if(liveRef.current)try{r.start();}catch(_){}};
+      r.start(); recRef.current=r; liveRef.current=true; setRec(true);
+    }
+  };
+
+  const analyze = async () => {
+    if(!apiKey.trim()){alert("Enter your Anthropic API key first.");return;}
+    if(!photo&&!tx.trim()&&!files.length){alert("Add a photo, recording, or file.");return;}
+    setBusy("Analyzing…"); setErr("");
+    try {
+      const content=[];
+      if(photo) content.push({type:"image",source:{type:"base64",media_type:photo.mime,data:photo.base64}});
+      const imgs=files.filter(f=>f.mime.startsWith("image/"));
+      const others=files.filter(f=>!f.mime.startsWith("image/"));
+      imgs.forEach(f=>content.push({type:"image",source:{type:"base64",media_type:f.mime,data:f.base64}}));
+      content.push({type:"text",text:
+`Analyze these meeting artifacts. Return ONLY valid JSON, no markdown.
+Meeting: "${title||"Team Meeting"}" — ${new Date().toLocaleDateString()}
+${tx?`Transcript:\n${tx}`:"No transcript."}
+${photo?"[Whiteboard photo attached]":""}${imgs.length?`\n[${imgs.length} additional image(s)]`:""}${others.length?`\nFiles: ${others.map(f=>f.name).join(", ")}`:""}
+Shape: {"summary":"2-3 sentences","whiteboardNotes":"key items or null","keyDecisions":["..."],"actionItems":[{"task":"...","owner":"...or null"}],"nextSteps":["..."]}`});
+      const res=await fetch(API,{method:"POST",headers:authHeaders(),
+        body:JSON.stringify({model:MODEL,max_tokens:1000,system:"Return only valid JSON.",messages:[{role:"user",content}]})});
+      const d=await res.json();
+      const raw=d.content?.find(b=>b.type==="text")?.text||"{}";
+      setSumm(JSON.parse(raw.replace(/```json|```/g,"").trim()));
+      setStep(1);
+    } catch(e){setErr("Analysis failed: "+e.message);}
+    finally{setBusy("");}
+  };
+
+  const sendEmails = async () => {
+    const valid=mails.filter(e=>e.trim().includes("@"));
+    if(!valid.length){alert("Add at least one email.");return;}
+    setBusy("Sending…"); setErr("");
+    try {
+      const d=new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+      const t=title||"Team Meeting";
+      const body=`Hi team,\n\nHere are the notes from ${t} on ${d}.\n\nSUMMARY\n${summ.summary}${summ.whiteboardNotes?`\n\nNOTES\n${summ.whiteboardNotes}`:""}\n\nKEY DECISIONS\n${summ.keyDecisions?.map(x=>`• ${x}`).join("\n")||"• None"}\n\nACTION ITEMS\n${summ.actionItems?.map(a=>`• ${a.task}${a.owner&&a.owner!=="null"?` → ${a.owner}`:""}`).join("\n")||"• None"}\n\nNEXT STEPS\n${summ.nextSteps?.map(x=>`• ${x}`).join("\n")||"• None"}\n\n—\nSent via Meeting Notes`;
+      const res=await fetch(API,{method:"POST",headers:authHeaders(),
+        body:JSON.stringify({model:MODEL,max_tokens:1000,
+          messages:[{role:"user",content:`Send email via Gmail:\nTo: ${valid.join(", ")}\nSubject: Meeting Notes: ${t} — ${new Date().toLocaleDateString()}\nBody:\n${body}`}],
+          mcp_servers:[GMAIL]})});
+      const data=await res.json();
+      if(data.error) throw new Error(data.error.message);
+      setSent(true); setStep(2);
+    } catch(e){setErr("Send failed: "+e.message);}
+    finally{setBusy("");}
+  };
+
+  const reset=()=>{setStep(0);setTitle("");setPhoto(null);setFiles([]);setTx("");setIntr("");setRec(false);setSumm(null);setMails(["",""]);setSent(false);setErr("");setBusy("");txBuf.current="";liveRef.current=false;/* apiKey kept */};
+  const fmtSize=b=>b<1024?b+"B":b<1048576?(b/1024).toFixed(1)+"KB":(b/1048576).toFixed(1)+"MB";
+  const hasArtifacts=photo||tx.trim()||files.length>0;
+
+  return (
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",maxWidth:430,margin:"0 auto",background:"var(--bg)"}}>
+
+      {/* Header */}
+      <div style={{background:"var(--surface)",borderBottom:"0.5px solid var(--border)",padding:"env(safe-area-inset-top,16px) 20px 0",flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",paddingTop:16,paddingBottom:12}}>
+          <div>
+            <p style={{fontSize:11,letterSpacing:".1em",color:"var(--text-3)",textTransform:"uppercase",fontWeight:600,marginBottom:2}}>Meeting Notes</p>
+            <h1 style={{fontSize:21,fontWeight:600,color:"var(--text)"}}>{STEPS[step]}</h1>
+          </div>
+          <span style={{fontSize:12,color:"var(--text-3)",paddingBottom:3}}>{new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",paddingBottom:14}}>
+          {STEPS.map((label,i)=>(
+            <React.Fragment key={i}>
+              <div style={{display:"flex",alignItems:"center",gap:5}}>
+                <div style={{width:21,height:21,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,transition:"all .2s",
+                  background:step>i?"var(--green)":step===i?"var(--text)":"var(--surface2)",
+                  color:step>i?"#fff":step===i?"#fff":"var(--text-3)"}}>
+                  {step>i?"✓":i+1}
+                </div>
+                <span style={{fontSize:12,fontWeight:500,color:step>=i?"var(--text)":"var(--text-3)",transition:"color .2s"}}>{label}</span>
+              </div>
+              {i<2&&<div style={{flex:1,height:1,margin:"0 8px",transition:"background .2s",background:step>i?"var(--green)":"var(--border)"}}/>}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{flex:1,padding:"20px 16px 100px",overflowY:"auto"}}>
+        {err&&<div style={{background:"var(--red-bg)",border:"0.5px solid #fca5a5",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"var(--red)"}}>{err}</div>}
+
+        {step===0&&(
+          <div className="slide-up" style={{display:"flex",flexDirection:"column",gap:20}}>
+
+            <FLD label="Anthropic API key">
+              <input value={apiKey} onChange={e=>saveKey(e.target.value)} placeholder="sk-ant-…" type="password"
+                style={{width:"100%",marginTop:7,background:"var(--surface)",border:`0.5px solid ${apiKey?"var(--green-border)":"var(--border-strong)"}`,borderRadius:10,padding:"11px 14px",fontSize:15,color:"var(--text)",outline:"none"}}/>
+              <p style={{fontSize:11,color:"var(--text-3)",marginTop:4}}>Saved locally in your browser. Never sent anywhere else.</p>
+            </FLD>
+
+            <FLD label="Meeting title">
+              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Product Roadmap Q2"
+                style={{width:"100%",marginTop:7,background:"var(--surface)",border:"0.5px solid var(--border-strong)",borderRadius:10,padding:"11px 14px",fontSize:15,color:"var(--text)",outline:"none"}}/>
+            </FLD>
+
+            {/* Three capture buttons */}
+            <div>
+              <p style={{fontSize:11,letterSpacing:".1em",color:"var(--text-3)",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>Add artifacts</p>
+              <input ref={photoRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} style={{display:"none"}}/>
+              <input ref={fileRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xls,.xlsx,.ppt,.pptx" onChange={e=>{addFiles(e.target.files);e.target.value="";}} style={{display:"none"}}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <CapBtn onClick={()=>photoRef.current?.click()} icon={<CamI/>} label="Photo" active={!!photo}/>
+                <CapBtn onClick={toggleRec} icon={rec?<Stop/>:<Mic/>} label={rec?"Stop":"Audio"} active={rec} danger={rec}/>
+                <CapBtn onClick={()=>fileRef.current?.click()} icon={<UpI/>} label="Upload" active={files.length>0}/>
+              </div>
+            </div>
+
+            {/* Drag-and-drop zone */}
+            <div
+              onDragOver={e=>{e.preventDefault();setDrag(true);}}
+              onDragLeave={e=>{e.preventDefault();setDrag(false);}}
+              onDrop={onDrop}
+              onClick={()=>fileRef.current?.click()}
+              style={{border:`1.5px dashed ${drag?"var(--blue)":"var(--border-strong)"}`,borderRadius:12,padding:"22px 16px",textAlign:"center",cursor:"pointer",transition:"all .15s",
+                background:drag?"var(--blue-bg)":"var(--surface)"}}>
+              <div style={{color:drag?"var(--blue)":"var(--text-3)",marginBottom:8,display:"flex",justifyContent:"center"}}><UpI/></div>
+              <p style={{fontSize:13,fontWeight:500,color:drag?"var(--blue)":"var(--text-2)"}}>
+                {drag?"Release to add files":"Drag files here"}
+              </p>
+              <p style={{fontSize:11,color:"var(--text-3)",marginTop:3}}>Images, PDFs, Word docs, spreadsheets</p>
+            </div>
+
+            {/* Photo preview */}
+            {photo&&(
+              <div style={{borderRadius:10,overflow:"hidden",position:"relative",border:"0.5px solid var(--border)"}}>
+                <img src={photo.preview} alt="" style={{width:"100%",height:160,objectFit:"cover",display:"block"}}/>
+                <button onClick={()=>{setPhoto(null);photoRef.current.value="";}}
+                  style={{position:"absolute",top:8,right:8,width:26,height:26,borderRadius:"50%",background:"rgba(0,0,0,.45)",border:"none",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <XI/>
+                </button>
+                <span style={{position:"absolute",bottom:8,left:8,background:"var(--green)",color:"#fff",borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:600}}>✓ Photo</span>
+              </div>
+            )}
+
+            {/* Uploaded files */}
+            {files.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <p style={{fontSize:11,letterSpacing:".1em",color:"var(--text-3)",textTransform:"uppercase",fontWeight:600}}>Attached files</p>
+                {files.map((f,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,padding:"10px 12px"}}>
+                    {f.preview
+                      ?<img src={f.preview} alt="" style={{width:36,height:36,borderRadius:6,objectFit:"cover",flexShrink:0}}/>
+                      :<div style={{width:36,height:36,borderRadius:6,background:"var(--blue-bg)",border:"0.5px solid var(--blue-border)",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--blue)",flexShrink:0}}><FileI/></div>
+                    }
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:13,fontWeight:500,color:"var(--text)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.name}</p>
+                      <p style={{fontSize:11,color:"var(--text-3)",marginTop:1}}>{fmtSize(f.size)}</p>
+                    </div>
+                    <button onClick={()=>setFiles(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"var(--text-3)",cursor:"pointer",padding:4,display:"flex",alignItems:"center"}}><XI/></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Transcript */}
+            {(tx||intr)&&(
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <p style={{fontSize:11,letterSpacing:".1em",color:"var(--text-3)",textTransform:"uppercase",fontWeight:600}}>
+                    Transcript{rec&&<span style={{background:"var(--red)",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:9,fontWeight:700,marginLeft:6,verticalAlign:"middle"}}>LIVE</span>}
+                  </p>
+                  <button onClick={()=>{setTx("");txBuf.current="";}} style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer",display:"flex",alignItems:"center",gap:3,fontSize:11}}><TrshI/> Clear</button>
+                </div>
+                <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,padding:"10px 12px"}}>
+                  <p style={{fontSize:13,color:"var(--text-2)",lineHeight:1.6}}>{tx}<span style={{color:"var(--text-3)",fontStyle:"italic"}}>{intr}</span></p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {step===1&&summ&&(
+          <div className="slide-up" style={{display:"flex",flexDirection:"column",gap:10,paddingTop:4}}>
+            <SC bg="var(--purple-bg)" bd="var(--purple-border)" dot="#7c3aed" label="Summary">
+              <p style={{fontSize:14,color:"#4c1d95",lineHeight:1.7}}>{summ.summary}</p>
+            </SC>
+            {summ.whiteboardNotes&&<SC bg="#fffbeb" bd="#fde68a" dot="#d97706" label="Notes"><p style={{fontSize:14,color:"#78350f",lineHeight:1.7}}>{summ.whiteboardNotes}</p></SC>}
+            {summ.keyDecisions?.length>0&&(
+              <SC bg="var(--green-bg)" bd="var(--green-border)" dot="var(--green)" label="Key decisions">
+                {summ.keyDecisions.map((d,i)=><BL key={i} dot="var(--green)" color="#064e3b">{d}</BL>)}
+              </SC>
+            )}
+            {summ.actionItems?.length>0&&(
+              <SC bg="#fff7ed" bd="#fed7aa" dot="#ea580c" label="Action items">
+                {summ.actionItems.map((a,i)=>(
+                  <div key={i} style={{display:"flex",gap:7,marginBottom:6}}>
+                    <span style={{color:"#ea580c",marginTop:1}}>•</span>
+                    <span style={{fontSize:14,color:"#7c2d12",lineHeight:1.5}}>{a.task}{a.owner&&a.owner!=="null"&&<span style={{color:"#ea580c"}}> → {a.owner}</span>}</span>
+                  </div>
+                ))}
+              </SC>
+            )}
+            {summ.nextSteps?.length>0&&(
+              <SC bg="#f0fdf4" bd="#bbf7d0" dot="#16a34a" label="Next steps">
+                {summ.nextSteps.map((s,i)=><BL key={i} dot="#16a34a" color="#14532d">{s}</BL>)}
+              </SC>
+            )}
+          </div>
+        )}
+
+        {step===2&&(
+          <div className="slide-up" style={{paddingTop:4}}>
+            {sent?(
+              <div className="pop" style={{textAlign:"center",paddingTop:52}}>
+                <div style={{width:62,height:62,borderRadius:"50%",background:"var(--green-bg)",border:"0.5px solid var(--green-border)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 18px",color:"var(--green)"}}>
+                  <ChkI/>
+                </div>
+                <h2 style={{fontSize:21,fontWeight:600,marginBottom:8}}>Notes sent!</h2>
+                <p style={{color:"var(--text-2)",fontSize:14,marginBottom:32,lineHeight:1.6}}>Your co-founders received<br/>the meeting summary.</p>
+                <button onClick={reset} style={{background:"var(--text)",color:"#fff",border:"none",borderRadius:10,padding:"13px 28px",fontSize:15,fontWeight:500,cursor:"pointer"}}>Start new meeting</button>
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                <FLD label="Co-founder emails">
+                  {mails.map((em,i)=>(
+                    <input key={i} type="email" value={em} onChange={e=>{const n=[...mails];n[i]=e.target.value;setMails(n);}} placeholder={`Co-founder ${i+1} email`}
+                      style={{width:"100%",marginTop:8,background:"var(--surface)",border:"0.5px solid var(--border-strong)",borderRadius:10,padding:"11px 14px",fontSize:15,color:"var(--text)",outline:"none"}}/>
+                  ))}
+                  <button onClick={()=>setMails([...mails,""])} style={{background:"none",border:"none",color:"var(--purple)",cursor:"pointer",fontSize:13,marginTop:8,display:"flex",alignItems:"center",gap:4}}><PlusI/> Add another email</button>
+                </FLD>
+                {summ&&(
+                  <div style={{background:"var(--surface)",border:"0.5px solid var(--border)",borderRadius:10,padding:14}}>
+                    <p style={{fontSize:10,letterSpacing:".1em",color:"var(--text-3)",textTransform:"uppercase",fontWeight:600,marginBottom:8}}>Email preview</p>
+                    <p style={{fontSize:13,color:"var(--text)",fontWeight:500,marginBottom:6}}>Subject: Meeting Notes: {title||"Team Meeting"} — {new Date().toLocaleDateString()}</p>
+                    <p style={{fontSize:12,color:"var(--text-2)",lineHeight:1.6}}>{summ.summary?.slice(0,120)}…</p>
+                    <p style={{fontSize:11,color:"var(--text-3)",marginTop:6}}>✅ {summ.keyDecisions?.length||0} decisions · 📌 {summ.actionItems?.length||0} action items</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {busy&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(249,249,248,.88)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,zIndex:100}}>
+          <div style={{width:34,height:34,border:"2px solid var(--border)",borderTopColor:"var(--text)",borderRadius:"50%"}} className="spin"/>
+          <p style={{fontSize:14,color:"var(--text-2)",fontWeight:500}}>{busy}</p>
+        </div>
+      )}
+
+      {!sent&&(
+        <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,padding:"10px 16px calc(10px + env(safe-area-inset-bottom))",background:"rgba(249,249,248,.96)",backdropFilter:"blur(10px)",borderTop:"0.5px solid var(--border)",display:"flex",gap:8}}>
+          {step===0&&<ABN onClick={analyze} disabled={!!busy||!hasArtifacts} primary icon={<SprkI/>} label={busy?"Analyzing…":"Analyze & summarize"}/>}
+          {step===1&&<><ABN onClick={()=>setStep(0)} icon={<BackI/>} label="Back"/><ABN onClick={()=>setStep(2)} primary icon={<SendI/>} label="Send notes"/></>}
+          {step===2&&!sent&&<><ABN onClick={()=>setStep(1)} icon={<BackI/>} label="Back"/><ABN onClick={sendEmails} disabled={!!busy} primary green icon={<SendI/>} label={busy?"Sending…":"Send to co-founders"}/></>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const FLD=({label,children})=><div><p style={{fontSize:11,letterSpacing:".1em",color:"var(--text-3)",textTransform:"uppercase",fontWeight:600}}>{label}</p>{children}</div>;
+
+const CapBtn=({onClick,icon,label,active,danger})=>(
+  <button onClick={onClick} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:7,padding:"14px 8px",borderRadius:12,border:`0.5px solid ${danger?"#fca5a5":active?"rgba(0,0,0,.22)":"var(--border-strong)"}`,cursor:"pointer",fontSize:12,fontWeight:500,transition:"all .15s",
+    background:danger?"var(--red-bg)":active?"var(--surface2)":"var(--surface)",
+    color:danger?"var(--red)":active?"var(--text)":"var(--text-2)"}}>
+    {icon}{label}
+    {active&&!danger&&<div style={{width:5,height:5,borderRadius:"50%",background:"var(--green)",marginTop:-3}}/>}
+  </button>
+);
+
+const SC=({bg,bd,dot,label,children})=>(
+  <div style={{background:bg,border:`0.5px solid ${bd}`,borderRadius:12,padding:"12px 14px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
+      <div style={{width:6,height:6,borderRadius:"50%",background:dot}}/>
+      <p style={{fontSize:10,letterSpacing:".1em",textTransform:"uppercase",fontWeight:700,color:dot}}>{label}</p>
+    </div>
+    {children}
+  </div>
+);
+
+const BL=({dot,color,children})=>(
+  <div style={{display:"flex",gap:7,marginBottom:6}}>
+    <span style={{color:dot,fontSize:14,marginTop:1}}>•</span>
+    <span style={{fontSize:14,color,lineHeight:1.5}}>{children}</span>
+  </div>
+);
+
+const ABN=({label,onClick,disabled,primary,green,icon})=>(
+  <button onClick={onClick} disabled={disabled}
+    style={{flex:primary?1:0,padding:"12px 16px",borderRadius:10,cursor:disabled?"not-allowed":"pointer",fontSize:14,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",
+      border:`0.5px solid ${primary?(green?"#059669":"var(--text)"):"var(--border-strong)"}`,
+      background:disabled?"var(--surface2)":green?"var(--green)":primary?"var(--text)":"var(--surface)",
+      color:disabled?"var(--text-3)":primary||green?"#fff":"var(--text)",
+      opacity:disabled?.55:1}}>
+    {icon}{label}
+  </button>
+);
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
