@@ -10,7 +10,6 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -62,10 +61,6 @@ function App() {
   const [step, setStep]   = useState(0);
   const [apiKey,setApiKey]= useState(()=>localStorage.getItem("anthro_key")||"");
   const [showKey,setShowKey]=useState(false);
-  const [ejsSvc, setEjsSvc]  = useState(()=>localStorage.getItem("ejs_svc")||"");
-  const [ejsTpl, setEjsTpl]  = useState(()=>localStorage.getItem("ejs_tpl")||"");
-  const [ejsPub, setEjsPub]  = useState(()=>localStorage.getItem("ejs_pub")||"");
-  const saveEjs = (k,v) => { localStorage.setItem(k,v); if(k==="ejs_svc")setEjsSvc(v); if(k==="ejs_tpl")setEjsTpl(v); if(k==="ejs_pub")setEjsPub(v); };
   const [title,setTitle]  = useState("");
   const [photo,setPhoto]  = useState(null);
   const [files,setFiles]  = useState([]);
@@ -165,22 +160,16 @@ Shape: {"summary":"2-3 sentences","whiteboardNotes":"key items or null","keyDeci
     finally{setBusy("");}
   };
 
-  const sendEmails = async () => {
+  const sendEmails = () => {
     const valid=mails.filter(e=>e.trim().includes("@"));
     if(!valid.length){alert("Add at least one email.");return;}
-    if(!ejsSvc||!ejsTpl||!ejsPub){alert("Add your EmailJS credentials in the settings above first.");return;}
-    setBusy("Sending…"); setErr("");
-    try {
-      const d=new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
-      const t=title||"Team Meeting";
-      const body=`Hi team,\n\nHere are the notes from ${t} on ${d}.\n\nSUMMARY\n${summ.summary}${summ.whiteboardNotes?`\n\nNOTES\n${summ.whiteboardNotes}`:""}\n\nKEY DECISIONS\n${summ.keyDecisions?.map(x=>`• ${x}`).join("\n")||"• None"}\n\nACTION ITEMS\n${summ.actionItems?.map(a=>`• ${a.task}${a.owner&&a.owner!=="null"?` → ${a.owner}`:""}`).join("\n")||"• None"}\n\nNEXT STEPS\n${summ.nextSteps?.map(x=>`• ${x}`).join("\n")||"• None"}\n\n—\nSent via Meeting Notes`;
-      const subject=`Meeting Notes: ${t} — ${new Date().toLocaleDateString()}`;
-      await Promise.all(valid.map(to=>
-        emailjs.send(ejsSvc, ejsTpl, {to_email:to, subject, message:body}, ejsPub)
-      ));
-      setSent(true); setStep(2);
-    } catch(e){setErr("Send failed: "+e.text||e.message);}
-    finally{setBusy("");}
+    const d=new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+    const t=title||"Team Meeting";
+    const body=`Hi team,\n\nHere are the notes from ${t} on ${d}.\n\nSUMMARY\n${summ.summary}${summ.whiteboardNotes?`\n\nNOTES\n${summ.whiteboardNotes}`:""}\n\nKEY DECISIONS\n${summ.keyDecisions?.map(x=>`• ${x}`).join("\n")||"• None"}\n\nACTION ITEMS\n${summ.actionItems?.map(a=>`• ${a.task}${a.owner&&a.owner!=="null"?` → ${a.owner}`:""}`).join("\n")||"• None"}\n\nNEXT STEPS\n${summ.nextSteps?.map(x=>`• ${x}`).join("\n")||"• None"}\n\n—\nSent via Meeting Notes`;
+    const subject=`Meeting Notes: ${t} — ${new Date().toLocaleDateString()}`;
+    const mailto=`mailto:${valid.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href=mailto;
+    setSent(true); setStep(2);
   };
 
   const reset=()=>{setStep(0);setTitle("");setPhoto(null);setFiles([]);setTx("");setIntr("");setRec(false);setSumm(null);setMails(["deepa@sparc-ai.org","kostas@sparc-ai.org"]);setSent(false);setErr("");setBusy("");txBuf.current="";liveRef.current=false;/* apiKey kept */};
@@ -237,17 +226,6 @@ Shape: {"summary":"2-3 sentences","whiteboardNotes":"key items or null","keyDeci
                 </button>}
               </div>
               <p style={{fontSize:11,color:"var(--text-3)",marginTop:4}}>Saved locally in your browser. Never sent anywhere else.</p>
-            </FLD>
-
-            <FLD label="EmailJS credentials">
-              <p style={{fontSize:11,color:"var(--text-3)",marginTop:4,marginBottom:6}}>Sign up free at <b>emailjs.com</b> → add Gmail service → create template with <code>to_email</code>, <code>subject</code>, <code>message</code> variables.</p>
-              <input value={ejsSvc} onChange={e=>saveEjs("ejs_svc",e.target.value)} placeholder="Service ID  (e.g. service_xxxxxx)"
-                style={{width:"100%",marginTop:4,background:"var(--surface)",border:`0.5px solid ${ejsSvc?"var(--green-border)":"var(--border-strong)"}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:"var(--text)",outline:"none"}}/>
-              <input value={ejsTpl} onChange={e=>saveEjs("ejs_tpl",e.target.value)} placeholder="Template ID  (e.g. template_xxxxxx)"
-                style={{width:"100%",marginTop:6,background:"var(--surface)",border:`0.5px solid ${ejsTpl?"var(--green-border)":"var(--border-strong)"}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:"var(--text)",outline:"none"}}/>
-              <input value={ejsPub} onChange={e=>saveEjs("ejs_pub",e.target.value)} placeholder="Public Key  (Account → API Keys)"
-                style={{width:"100%",marginTop:6,background:"var(--surface)",border:`0.5px solid ${ejsPub?"var(--green-border)":"var(--border-strong)"}`,borderRadius:10,padding:"11px 14px",fontSize:14,color:"var(--text)",outline:"none"}}/>
-              <p style={{fontSize:11,color:"var(--text-3)",marginTop:4}}>Saved locally. Free tier = 200 emails/month.</p>
             </FLD>
 
             <FLD label="Meeting title">
